@@ -8,6 +8,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
+#include <stdbool.h>
+
 
 bool existsFile(char accNo[]);
 void createAccount();
@@ -18,6 +20,11 @@ void deleteAccount();
 void deposit();
 void format_chars();
 void withdraw();
+void remit();
+void delay(int number_of_seconds);
+void setBalance(char filePath[], double balance);
+double getBalance(char filePath[]);
+bool checkPIN(char accountNumber[]);
 
 int main() {
     char choice[1024];
@@ -26,6 +33,7 @@ int main() {
 
     do {
         // Format and output welcome message
+        delay(200);
         format_chars();
         printf("             WELCOME TO SOFTBANK              ");
         printf("\n                 1. CREATE NEW BANK ACCOUNT");
@@ -71,17 +79,214 @@ int main() {
                 withdraw();
                 break;
 
+            case 4:
+                remit();
+                break;
+
             case 5:
-                printf("\nExiting App...");
+                printf("Exiting App...");
                 break;
 
             default:
-                printf("\nInvalid Choice\n");
+                printf("Invalid Choice");
         }
     } while (strcmp(choice, "Q") != 0);
 
 
     return 0;
+}
+
+void delay(int number_of_seconds){
+    int milli_seconds = 1000 * number_of_seconds;
+    clock_t start_time = clock();
+    while (clock() < start_time + milli_seconds);
+}
+char getAccountType(char filePath[]) {
+    char buffer[1024] = "";
+
+    FILE *bfile = fopen(filePath, "r");
+    fgets(buffer, sizeof(buffer), bfile);
+    buffer[strcspn(buffer, "\n")] = 0;
+
+    int typeIndex = strstr(buffer, "TYPE:") - &buffer[0] + 5;
+
+    return buffer[typeIndex];
+}
+
+void remit() {
+    char accOriginNo[100] = "";
+    char accDestNo[100] = "";
+
+    // Gets the origin account number from the user
+    do {
+        printf("Enter Origin Account Number: ");
+        fgets(accOriginNo, sizeof(accOriginNo), stdin);
+        accOriginNo[strcspn(accOriginNo, "\n")] = 0;
+        strcat(accOriginNo, ".txt");
+
+        if (!existsFile(accOriginNo)) printf("Enter an Existing Account No. \n\n");
+
+    } while (!existsFile(accOriginNo));
+
+    // pergi balih
+
+    do {
+        printf("Enter Destination Account Number: ");
+        fgets(accDestNo, sizeof(accDestNo), stdin);
+        accDestNo[strcspn(accDestNo, "\n")] = 0;
+        strcat(accDestNo, ".txt");
+
+        if (!existsFile(accOriginNo)) printf("Enter an Existing Account No. \n\n");
+        if (strcmp(accDestNo, accOriginNo)==0) printf("Cannot Send Money to the Same Bank Account");
+
+    } while (!existsFile(accDestNo) || strcmp(accDestNo, accOriginNo)==0);
+
+    //TYPE:
+    char pathBeneficiary[100] = "/home/moiz/CLionProjects/Assignment/database/";
+    char pathRecipient[100] = "/home/moiz/CLionProjects/Assignment/database/";
+
+    strcat(pathBeneficiary, accOriginNo);
+    strcat(pathRecipient, accDestNo);
+
+    pathBeneficiary[strlen(pathBeneficiary)] = 0;
+    pathRecipient[strlen(pathRecipient)] = 0;
+
+    double amountAdd = 0;
+    double amountReceived = 0;
+    double senderBalance = getBalance(pathBeneficiary);
+    double receiverBalance = getBalance(pathRecipient);
+
+    char amount[100] = "";
+    char *endPtr;
+
+    checkPIN(accOriginNo);
+
+    while (amountAdd <= 0 || senderBalance < amountAdd) {
+        printf("Enter Amount to Transfer: ");
+        fgets(amount,sizeof(amount),stdin);
+        amount[strcspn(amount, "\n")] = 0;
+
+        amountAdd = strtod(amount, &endPtr);
+
+        if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
+        if (senderBalance < amountAdd) printf("Sending amount cannot exceed balance.\n\n");
+
+    }
+
+    switch (toupper(getAccountType(pathBeneficiary))) {
+        case 'C':
+            amountReceived = (1-0.02) * amountAdd;
+            break;
+
+        case 'S':
+            amountReceived = (1-0.03) * amountAdd;
+            break;
+    }
+
+    setBalance(pathRecipient, receiverBalance + amountReceived);
+    setBalance(pathBeneficiary, senderBalance - amountAdd);
+
+    format_chars();
+    printf("                     SUCCESSFUL TRANSFER %.2lf", amountReceived);
+    printf("\n                      BREAKDOWN: ");
+    printf("\n                         TO %s:  RM %.2lf", accDestNo, amountAdd);
+    printf("\n                         CHARGES INCURRED:  RM %.2lf", amountAdd-amountReceived);
+    printf("\n                     TRANSFERRED:  RM %.2lf  -  RM %.2lf  =  RM %.2lf", amountAdd, amountAdd-amountReceived, amountReceived);
+    printf("\n");
+    format_chars();
+
+}
+bool checkPIN(char accountNumber[]) {
+    char accDetails[1024] = "", PINUsr[100] = "";
+    bool match = false;
+
+    char path[1024] = "/home/moiz/CLionProjects/Assignment/database/";
+    strcat(path, accountNumber);
+    strcat(path, "\0");
+
+    FILE *PINFile = fopen(path, "r");
+    fgets(accDetails, sizeof(accDetails), PINFile);
+
+    int startPIN = strstr(accDetails, "PIN:") - &accDetails[0];
+    char pin[5] = {accDetails[startPIN+4], accDetails[startPIN+5], accDetails[startPIN+6], accDetails[startPIN+7], '\0'};
+
+     do {
+        printf("Enter PIN: ");
+        fgets(PINUsr, sizeof(PINUsr), stdin);
+        PINUsr[strcspn(PINUsr, "\n")] = 0;
+
+        if (strcmp(PINUsr, pin) != 0) {printf("Incorrect PIN. \n\n");}
+        else {match = true;}
+
+    } while (strcmp(PINUsr, pin) != 0);
+
+    fclose(PINFile);
+
+    return match;
+
+}
+
+double getBalance(char filePath[]) {
+    char buffer[1024] = "";
+    char balance[100] = "";
+
+    FILE *pfile = fopen(filePath, "r");
+    fgets(buffer, sizeof(buffer), pfile);
+    fclose(pfile);
+    buffer[strcspn(buffer, "\n")] = 0;
+
+    int balStart = strstr(buffer, "BALANCE:") - &buffer[0] + 8;
+    int balEnd = strstr(buffer, ",PIN:") - &buffer[0];
+    int length = balEnd - balStart;
+
+    for (int z=0; z<length; z++) {
+        char now[2] = {buffer[balStart + z], '\0'};
+        strcat(balance, &now[0]);
+    }
+
+    double finalBalance = 0;
+
+    strcat(balance, "\0");
+    finalBalance = atof(balance);
+
+    return finalBalance;
+}
+void setBalance(char path[], double finalBalance) {
+    char finalPrint[200] = "";
+    char finalBalanceString[200] = "";
+    char buffer[1024] = "";
+
+    FILE *pfile = fopen(path, "r");
+    fgets(buffer, sizeof(buffer), pfile);
+    fclose(pfile);
+    buffer[strcspn(buffer, "\n")] = 0;
+
+    int balStart = strstr(buffer, "BALANCE:") - &buffer[0] + 8;
+    int balEnd = strstr(buffer, ",PIN:") - &buffer[0];
+
+    snprintf(finalBalanceString, sizeof(finalBalanceString), "%.2f", finalBalance);
+    strcat(finalBalanceString, "\0");
+
+
+    char cache[2] = {'s', '\0'};
+    for (int z=0; z<balStart; z++) {
+        cache[0] = buffer[z];
+        strcat(finalPrint, cache);
+    }
+
+    strcat(finalPrint, finalBalanceString);
+
+    for (int z=balEnd; z<strlen(buffer); z++) {
+        cache[0] = buffer[z];
+        strcat(finalPrint, cache);
+    }
+
+    strcat(finalPrint, "\0");
+
+    FILE *wfile = fopen(path, "w");
+    fprintf(wfile, "%s\n", finalPrint);
+    fclose(wfile);
+
 }
 void createAccount() {
     printf("                       CREATE ACCOUNT");
@@ -118,8 +323,8 @@ void createAccount() {
         fgets(IDNo, sizeof(IDNo), stdin);
         IDNo[strcspn(IDNo, "\n")] = 0;
 
-        if (!isStr(name)) printf("Enter a Valid Integer ID\n\n");
-    } while (!isNum(IDNo));
+        if (!isStr(name) || strlen(IDNo) < 4) printf("Enter a Valid, 4+ Digit Integer ID\n\n");
+    } while (!isNum(IDNo) || strlen(IDNo) < 4);
 
 
     // gets PIN from user
@@ -162,10 +367,10 @@ void createAccount() {
 }
 void deleteAccount() {
     FILE *pfile = fopen("/home/moiz/CLionProjects/Assignment/database/index.txt", "r");
-    char buffer[1024] = "", accNo[1024] = "", accDetails[1024] = "";
+    char buffer[1024] = "", accNo[1024] = "", accDetails[1024] = "", accConfirm[1024] = "";
     int typeIndex = 0;
 
-    printf("\n                         DELETE ACCOUNT");
+    printf("                         DELETE ACCOUNT");
     format_chars();
 
     printf("ALL ACCOUNTS: \n");
@@ -180,9 +385,20 @@ void deleteAccount() {
         fgets(accNo, sizeof(accNo), stdin);
         accNo[strcspn(accNo, "\n")] = 0;
         strcat(accNo, ".txt");
-        if (!existsFile(accNo)) printf("Enter an Existing Account No. \n\n");
 
-    } while (!existsFile(accNo));
+        if (!existsFile(accNo)) {
+            printf("Enter an Existing Account No. \n\n");
+            continue;
+        }
+
+        printf("Repeat Account Number: ");
+        fgets(accConfirm, sizeof(accConfirm), stdin);
+        accConfirm[strcspn(accConfirm, "\n")] = 0;
+        strcat(accConfirm, ".txt");
+
+        if (strcmp(accConfirm, accNo) != 0) {printf("\nAccount Details Do Not Match.");}
+
+    } while ((!existsFile(accNo)) && (strcmp(accConfirm, accNo) != 0));
 
     char path[1024] = "/home/moiz/CLionProjects/Assignment/database/";
     strcat(path, accNo);
@@ -191,7 +407,6 @@ void deleteAccount() {
     FILE *delFIle = fopen(path, "r");
     fgets(accDetails, sizeof(accDetails), delFIle);
 
-    int startPIN = strstr(accDetails, "PIN:") - &accDetails[0];
     int startID = strstr(accDetails, "ID:") - &accDetails[0] + 3;
     int IDlen = strstr(accDetails, ",NUMBER:") - &accDetails[startID];
 
@@ -214,16 +429,7 @@ void deleteAccount() {
         usrID[2]==ID[strlen(ID)-2] &&
         usrID[3]==ID[strlen(ID)-1]));
 
-    char pin[5] = {accDetails[startPIN+4], accDetails[startPIN+5], accDetails[startPIN+6], accDetails[startPIN+7], '\0'};
-
-    do {
-        printf("Enter PIN: ");
-        fgets(PINUsr, sizeof(PINUsr), stdin);
-        PINUsr[strcspn(PINUsr, "\n")] = 0;
-
-        if (strcmp(PINUsr, pin) != 0) printf("Incorrect PIN. \n\n");
-
-    } while (strcmp(PINUsr, pin) != 0);
+    checkPIN(accNo);
 
     if (existsFile(accNo)) {
         char contents[4096*2] = "", buffer[1024] = "";
@@ -245,7 +451,7 @@ void deleteAccount() {
         fclose(writeFile);
 
         format_chars();
-        printf("\nACCOUNT DELETED SUCCESSFULLY\n");
+        printf("ACCOUNT DELETED SUCCESSFULLY");
         format_chars();
 
         FILE *logFile = fopen("/home/moiz/CLionProjects/Assignment/database/transaction.log", "a");
@@ -256,7 +462,7 @@ void deleteAccount() {
         char logs[1024];
 
         // adds account deletion to logs
-        snprintf(logs,1024, "<depositAccount>%s,<time>%s",accNo, ctime(&currentTime));
+        snprintf(logs,1024, "<deleteAccount>%s,<time>%s",accNo, ctime(&currentTime));
 
         fprintf(logFile, "%s", logs);
         fclose(logFile);
@@ -352,32 +558,17 @@ void deposit() {
         errno = 0;
     } while(!existsFile(accountNumber));
 
+
     if (existsFile(accountNumber)) {
         char buffer[1024] = "";
-        char balance[10] = "";
 
         char path[100] = "/home/moiz/CLionProjects/Assignment/database/";
         strcat(path, accountNumber);
         path[strlen(path)] = 0;
 
-        FILE *pfile = fopen(path, "r");
-        fgets(buffer, sizeof(buffer), pfile);
-        fclose(pfile);
-        buffer[strcspn(buffer, "\n")] = 0;
+        checkPIN(accountNumber);
 
-        int balStart = strstr(buffer, "BALANCE:") - &buffer[0] + 8;
-        int balEnd = strstr(buffer, ",PIN:") - &buffer[0];
-        int length = balEnd - balStart;
-
-        for (int z=0; z<length; z++) {
-            char now[2] = {buffer[balStart + z], '\0'};
-   		    strcat(balance, &now[0]);
-        }
-
-        double finalBalance = 0;
-
-        strcat(balance, "\0");
-        finalBalance = atof(balance);
+        double finalBalance = getBalance(path);
 
         double amountAdd = 0;
         char amount[100] = "";
@@ -390,31 +581,14 @@ void deposit() {
 
             amountAdd = strtod(amount, &endPtr);
 
-            if (endPtr == amount || *endPtr != '\0') {
-                printf("Invalid input. Please enter a numeric value.\n\n");
-            }
+            if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
+            if (amountAdd<=0) printf("Please Enter a Value Above 0.\n\n");
+
         }
 
         finalBalance += amountAdd;
 
-        char finalPrint[90] = "";
-        char finalBalanceString[100] = "";
-        snprintf(finalBalanceString, sizeof(finalBalanceString), "%.2f", finalBalance);
-        strcat(finalBalanceString, "\0");
-
-        char cache[2] = {'s', '\0'};
-        for (int z=0; z<balStart; z++) {
-            cache[0] = buffer[z];
-            strcat(finalPrint, cache);
-        }
-
-        strcat(finalPrint, finalBalanceString);
-        strcat(finalPrint, ",PIN:3342");
-        strcat(finalPrint, "\0");
-
-        FILE *wfile = fopen(path, "w");
-        fprintf(wfile, "%s\n", finalPrint);
-        fclose(wfile);
+        setBalance(path, finalBalance);
 
         FILE *logFile = fopen("/home/moiz/CLionProjects/Assignment/database/transaction.log", "a");
 
@@ -436,7 +610,7 @@ void deposit() {
         }
 
         format_chars();
-        printf("DEPOSIT OF RM %.2f WAS SUCCESSFULLY TRANSFERRED TO ACCOUNT NO. %s. \n"
+        printf("DEPOSIT OF RM %.2f WAS SUCCESSFULLY TRANSFERRED TO ACCOUNT NO %s \n"
                "CURRENT BALANCE: RM %.2f", amountAdd, displayAccount, finalBalance);
         format_chars();
 
@@ -457,9 +631,13 @@ void withdraw() {
 
     } while(!existsFile(accountNumber));
 
+
+
     if (existsFile(accountNumber)) {
         char buffer[1024] = "";
         char balance[100] = "";
+
+        checkPIN(accountNumber);
 
 
         char path[100] = "/home/moiz/CLionProjects/Assignment/database/";
@@ -491,12 +669,12 @@ void withdraw() {
 
             amountWithdraw = strtod(amount, &endPtr);
 
-            if (endPtr == amount || *endPtr != '\0') {
-                printf("Invalid input. Please enter a numeric value.\n\n");
-            }
-            finalBalance -= amountWithdraw;
+            if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
+            if (finalBalance-amountWithdraw < 0.0f) printf("Withdrawal amount is greater than the balance.\n\n");
+            if (amountWithdraw <= 0.0f) printf("Cannot Withdraw Negative Amounts\n");
 
-        } while (amountWithdraw <= 0.0f || finalBalance < 0.0f);
+        } while (amountWithdraw <= 0.0f || finalBalance-amountWithdraw < 0.0f);
+        finalBalance -= amountWithdraw;
 
 
         char finalPrint[90] = "";
@@ -510,7 +688,9 @@ void withdraw() {
         }
 
         strcat(finalPrint, finalBalanceString);
-        strcat(finalPrint, ",PIN:3342");
+        for (int i=balEnd; i<strlen(buffer); i++) {
+            cache[0] = buffer[i];
+            strcat(finalPrint, cache);        }
 
         FILE *wfile = fopen(path, "w");
         fprintf(wfile, "%s\n", finalPrint);
@@ -545,11 +725,9 @@ void withdraw() {
         format_chars();
 
     }
-
-
 }
 void format_chars() {
     printf("\n");
-    for (int i=0; i<70; i++)printf("*");
+    for (int i=0; i<80; i++)printf("*");
     printf("\n");
 }
