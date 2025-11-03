@@ -173,26 +173,24 @@ void remit() {
 
     }
 
-    switch (toupper(getAccountType(pathBeneficiary))) {
-        case 'C':
-            amountReceived = (1-0.02) * amountAdd;
-            break;
+    if ((getAccountType(pathBeneficiary)== 'C')&&(getAccountType(pathRecipient)== 'S')) {
+        amountReceived = (1-0.03) * amountAdd;
+    }
 
-        case 'S':
-            amountReceived = (1-0.03) * amountAdd;
-            break;
+    if ((getAccountType(pathBeneficiary)== 'S')&&(getAccountType(pathRecipient)== 'C')) {
+        amountReceived = (1-0.02) * amountAdd;
     }
 
     setBalance(pathRecipient, receiverBalance + amountReceived);
     setBalance(pathBeneficiary, senderBalance - amountAdd);
 
     format_chars();
-    printf("                     SUCCESSFUL TRANSFER %.2lf", amountReceived);
-    printf("\n                      BREAKDOWN: ");
-    printf("\n                         TO %s:  RM %.2lf", accDestNo, amountAdd);
-    printf("\n                         CHARGES INCURRED:  RM %.2lf", amountAdd-amountReceived);
+    printf("                       SUCCESSFUL REMITTANCE RECEIPT");
+    printf("\n                        RM %.2lf WAS TRANSFERRED TO ACCOUNT NUMBER %s", amountReceived, accDestNo);
+    printf("\n                        BREAKDOWN: ");
+    printf("\n                           TO %s:  RM %.2lf", accDestNo, amountAdd);
+    printf("\n                           CHARGES INCURRED:  RM %.2lf", amountAdd-amountReceived);
     printf("\n                     TRANSFERRED:  RM %.2lf  -  RM %.2lf  =  RM %.2lf", amountAdd, amountAdd-amountReceived, amountReceived);
-    printf("\n");
     format_chars();
 
 }
@@ -323,7 +321,7 @@ void createAccount() {
         fgets(IDNo, sizeof(IDNo), stdin);
         IDNo[strcspn(IDNo, "\n")] = 0;
 
-        if (!isStr(name) || strlen(IDNo) < 4) printf("Enter a Valid, 4+ Digit Integer ID\n\n");
+        if (!isNum(IDNo) || strlen(IDNo) < 4) printf("Enter a Valid, 4+ Digit Integer ID\n\n");
     } while (!isNum(IDNo) || strlen(IDNo) < 4);
 
 
@@ -398,7 +396,7 @@ void deleteAccount() {
 
         if (strcmp(accConfirm, accNo) != 0) {printf("\nAccount Details Do Not Match.");}
 
-    } while ((!existsFile(accNo)) && (strcmp(accConfirm, accNo) != 0));
+    } while ((!existsFile(accNo)) || (strcmp(accConfirm, accNo) != 0));
 
     char path[1024] = "/home/moiz/CLionProjects/Assignment/database/";
     strcat(path, accNo);
@@ -574,7 +572,7 @@ void deposit() {
         char amount[100] = "";
         char *endPtr;
 
-        while (amountAdd <= 0) {
+        while (amountAdd <= 0 || amountAdd > 50000) {
             printf("Enter Amount to deposit: ");
             fgets(amount,sizeof(amount),stdin);
             amount[strcspn(amount, "\n")] = 0;
@@ -582,7 +580,7 @@ void deposit() {
             amountAdd = strtod(amount, &endPtr);
 
             if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
-            if (amountAdd<=0) printf("Please Enter a Value Above 0.\n\n");
+            else if (amountAdd<=0) printf("Please Enter a Value Above 0.\n\n");
 
         }
 
