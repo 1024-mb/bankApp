@@ -1,5 +1,8 @@
 #include <ctype.h>
 #include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
 #include <regex.h>
@@ -29,6 +32,12 @@ void exitProgram();
 void listAccounts();
 
 int main() {
+    // checks if database directory exists and makes it if not.
+    struct stat st = {0};
+    if (stat("./database", &st) == -1) {
+        mkdir("./database", 0700);
+    }
+
     char choice[1024];
     char options[6][100] = {"1. CREATE NEW BANK ACCOUNT", "2. DELETE BANK ACCOUNT",
         "3. DEPOSIT IN BANK", "4. WITHDRAW FROM BANK", "5. REMITTANCE", "Q. QUIT"};
@@ -91,7 +100,7 @@ int main() {
                 break;
 
             default:
-                printf("Invalid Choice");
+                printf("Invalid Choice\n");
         }
     } while (strcmp(choice, "Q") != 0);
 
@@ -134,7 +143,7 @@ void remit() {
         accOriginNo[strcspn(accOriginNo, "\n")] = 0;
         strcat(accOriginNo, ".txt");
 
-        if (!existsFile(accOriginNo)) printf("Enter an Existing Account No. \n");
+        if (!existsFile(accOriginNo)) printf("Enter an Existing Account No. \n\n");
     } while (!existsFile(accOriginNo));
 
 
@@ -151,8 +160,8 @@ void remit() {
     } while (!existsFile(accDestNo) || strcmp(accDestNo, accOriginNo)==0);
 
     //sets up the path for reading in the balances of both and modifying them.
-    char pathBeneficiary[100] = "/home/moiz/CLionProjects/Assignment/database/";
-    char pathRecipient[100] = "/home/moiz/CLionProjects/Assignment/database/";
+    char pathBeneficiary[100] = "./database/";
+    char pathRecipient[100] = "./database/";
 
     strcat(pathBeneficiary, accOriginNo);
     strcat(pathRecipient, accDestNo);
@@ -191,6 +200,7 @@ void remit() {
 
         amountAdd = strtod(amount, &endPtr);
 
+        if (!isNum(amount)) continue;
         if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
         if (senderBalance < amountAdd) printf("Error - Insufficient Balance.\n\n");
         if (amountAdd == 0) printf("Error - Add Amount Must Be Greater than 0.\n\n");
@@ -217,10 +227,11 @@ void remit() {
     printf("\n");
     format_chars();
     printf("                     SUCCESSFUL REMITTANCE RECEIPT\n");
-    printf("                         %s ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶  %8s\n", displayAccountOriginNo, displayAccountDestNo);
+    printf("                         %s ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶  %s\n", displayAccountOriginNo, displayAccountDestNo);
     printf("                         AMOUNT:                               RM %.2lf\n", amountAdd);
     printf("                         CHARGES INCURRED:                     RM %.2lf\n", percentOnTop*amountAdd);
-    printf("                         TRANSFERRED:  RM %.2lf - RM %.2lf   =  RM %.2lf\n", amountAdd, percentOnTop*amountAdd, amountAdd);
+    printf("                         DEDUCTED:  RM %.2lf + RM %.2lf  =  RM %.2lf\n", amountAdd, percentOnTop*amountAdd, senderDeduct);
+    printf("                         %s: %.2lf - %.2lf  =  RM %.2lf\n", displayAccountOriginNo, senderBalance, senderDeduct, senderBalance - senderDeduct);
     format_chars();
     printf("\n");
 
@@ -231,7 +242,7 @@ bool checkPIN(char accountNumber[]) {
     char accDetails[1024] = "", PINUsr[100] = "";
     bool match = false;
 
-    char path[1024] = "/home/moiz/CLionProjects/Assignment/database/";
+    char path[1024] = "./database/";
     strcat(path, accountNumber);
     strcat(path, "\0");
 
@@ -361,7 +372,7 @@ void createAccount() {
     } while (existsFile(strVersion));
 
     // adds creation to logs
-    FILE *pfile = fopen("/home/moiz/CLionProjects/Assignment/database/transaction.log", "a");
+    FILE *pfile = fopen("./database/transaction.log", "a");
 
     // gets + validates name from user
     do {
@@ -437,13 +448,14 @@ void createAccount() {
 }
 
 void listAccounts() {
-    FILE *pfile = fopen("/home/moiz/CLionProjects/Assignment/database/index.txt", "r");
+    FILE *pfile = fopen("./database/index.txt", "r");
     char bufferIndex[1024] = "", fileName[100] = "", out[200] = "";
     int typeIndex = 0;
 
     printf("ALL ACCOUNTS: \n\n");
     printf("  NUMBER   |    NAME  \n");
     while (fgets(bufferIndex, sizeof(bufferIndex), pfile) != NULL) {
+        // Finds index of string to print until
         typeIndex = (strstr(bufferIndex, ".") == NULL) ? -1 : strstr(bufferIndex, ".") - &bufferIndex[0];
         if (typeIndex == -1) exitProgram();
 
@@ -453,14 +465,15 @@ void listAccounts() {
         }
         strcat(fileName, bufferIndex);
 
+        // eliminates special characters from the string
         fileName[strcspn(fileName, "\a")] =0;
         fileName[strcspn(fileName, "\n")] =0;
 
-
+        // formats the output to resemble a table
         strcat(out, displayName);
         strcat(out, "  |  ");
 
-        char path[200] = "/home/moiz/CLionProjects/Assignment/database/" ;
+        char path[200] = "./database/" ;
         strcat(path, fileName);
 
         char accDetails[1024] = "";
@@ -481,6 +494,8 @@ void listAccounts() {
         fclose(nameFile);
 
         printf("\n");
+
+        // clears all the string so that the data doest get carried over from the previous iteration.
         strcpy(bufferIndex, "");
         strcpy(fileName, "");
         strcpy(out, "");
@@ -520,7 +535,7 @@ void deleteAccount() {
 
     } while ((!existsFile(accNo)) || (strcmp(accConfirm, accNo) != 0));
 
-    char path[1024] = "/home/moiz/CLionProjects/Assignment/database/";
+    char path[1024] = "./database/";
     strcat(path, accNo);
     strcat(path, "\0");
 
@@ -560,7 +575,7 @@ void deleteAccount() {
         char contents[4096*2] = "", buffer[1024] = "";
         remove(path);
 
-        FILE *modIndex = fopen("/home/moiz/CLionProjects/Assignment/database/index.txt", "r");
+        FILE *modIndex = fopen("./database/index.txt", "r");
         while (fgets(buffer, sizeof(buffer), modIndex) != NULL) {
             buffer[strcspn(buffer, "\n")] = 0;
             if (!(strcmp(buffer, accNo) == 0)) {
@@ -570,7 +585,7 @@ void deleteAccount() {
         }
         fclose(modIndex);
 
-        FILE *writeFile = fopen("/home/moiz/CLionProjects/Assignment/database/index.txt", "w");
+        FILE *writeFile = fopen("./database/index.txt", "w");
         fprintf(writeFile, "%s", contents);
         fclose(writeFile);
 
@@ -578,7 +593,7 @@ void deleteAccount() {
         printf("ACCOUNT DELETED SUCCESSFULLY\n");
         format_chars();
 
-        FILE *logFile = fopen("/home/moiz/CLionProjects/Assignment/database/transaction.log", "a");
+        FILE *logFile = fopen("./database/transaction.log", "a");
 
         time_t currentTime;
         time(&currentTime);
@@ -595,7 +610,7 @@ void deleteAccount() {
 //checks if the text file with the account number exists,
 //i.e. if the file is in the index
 bool existsFile(char accNo[]) {
-    FILE *pfile = fopen("/home/moiz/CLionProjects/Assignment/database/index.txt", "r");
+    FILE *pfile = fopen("./database/index.txt", "r");
     char buffer[1024] = "";
     bool returnVal = false;
 
@@ -613,7 +628,7 @@ bool existsFile(char accNo[]) {
 // writes the data to the file corresponding to the account number
 // used for updating the balance during deposit/withdrawal
 void addFile(char accNo[], char name[], char ID[], char accType[], float balance, char PIN[]) {
-    char finalFile[1024] = "/home/moiz/CLionProjects/Assignment/database/";
+    char finalFile[1024] = "./database/";
     strcat(finalFile, accNo);
     FILE *pfile = fopen(finalFile, "w");
 
@@ -629,7 +644,7 @@ void addFile(char accNo[], char name[], char ID[], char accType[], float balance
         fprintf(pfile, "%s" ,logs);
         fclose(pfile);
 
-        FILE *index = fopen("/home/moiz/CLionProjects/Assignment/database/index.txt", "a");
+        FILE *index = fopen("./database/index.txt", "a");
         fprintf(index, "%s\n", accNo);
         fclose(index);
     }
@@ -637,18 +652,14 @@ void addFile(char accNo[], char name[], char ID[], char accType[], float balance
 
 // function for verifying if a string is a number
 bool isNum(char inString[]) {
-    const char* pattern = "[0-9]";
-    regex_t re;
-    int returnVal;
+    int maxIndex = strlen(inString);
+    char current;
 
-    if (regcomp(&re, pattern, REG_EXTENDED)) {
-        perror("Failed to compile regular expression");
-        exit(EXIT_FAILURE);
-    }
-
-    for (int i=0; i<strlen(inString); i++) {
-        returnVal = regexec(&re, &inString[i], 0, NULL, 0);
-        if (returnVal != 0) return false;
+    for (int i=0; i<maxIndex; i++) {
+        current = inString[i];
+        if (!('0' <= current && current <= '9') && !(current == '.')) {
+            return false;
+        }
     }
 
     return true;
@@ -697,7 +708,7 @@ void deposit() {
 
     if (existsFile(accountNumber)) {
 
-        char path[100] = "/home/moiz/CLionProjects/Assignment/database/";
+        char path[100] = "./database/";
         strcat(path, accountNumber);
         path[strlen(path)] = 0;
 
@@ -728,7 +739,7 @@ void deposit() {
         finalBalance += amountAdd;
         setBalance(path, finalBalance);
 
-        FILE *logFile = fopen("/home/moiz/CLionProjects/Assignment/database/transaction.log", "a");
+        FILE *logFile = fopen("./database/transaction.log", "a");
 
         time_t currentTime;
         time(&currentTime);
@@ -775,7 +786,7 @@ void withdraw() {
 
         checkPIN(accountNumber);
 
-        char path[100] = "/home/moiz/CLionProjects/Assignment/database/";
+        char path[100] = "./database/";
         strcat(path, accountNumber);
         path[strlen(path)] = 0;
 
@@ -798,7 +809,7 @@ void withdraw() {
 
             if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
             if (finalBalance-amountWithdraw < 0.0f) printf("Withdrawal amount is greater than the balance.\n\n");
-            if (amountWithdraw <= 0.0f) printf("Withdrawal amount must be greater than or equal to 0\n\n");
+            if (amountWithdraw <= 0.0f) printf("Withdrawal amount must be greater than 0\n\n");
 
         } while (amountWithdraw <= 0.0f || finalBalance-amountWithdraw < 0.0f);
         finalBalance -= amountWithdraw;
@@ -807,7 +818,7 @@ void withdraw() {
 
         char finalPrint[90] = "";
 
-        FILE *logFile = fopen("/home/moiz/CLionProjects/Assignment/database/transaction.log", "a");
+        FILE *logFile = fopen("./database/transaction.log", "a");
         strcat(finalPrint, "\0");
 
         time_t currentTime;
