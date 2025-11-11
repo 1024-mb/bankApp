@@ -1,17 +1,12 @@
 #include <ctype.h>
-#include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
-#include <regex.h>
 #include <string.h>
 #include <math.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
-#include <stdbool.h>
 #include <unistd.h>
 
 #include "formatChars.h"
@@ -24,6 +19,10 @@
 #include "isStr.h"
 #include "addFile.h"
 
+
+// MAIN Program:
+//      Contains all 6 core functions  along with utilities that cannot be separated into header files
+
 void createAccount();
 void deleteAccount();
 void deposit();
@@ -32,11 +31,23 @@ void listAccounts();
 void remit();
 
 int main() {
-    // checks if database directory exists and makes it if not.
+    // initializes all required files for the program
+    // checks if necessary files exist and makes them if not.
     struct stat st = {0};
     if (stat("./database", &st) == -1) {
         mkdir("./database", 0700);
+
+        printf("\n Please Wait....\n");
+        printf("\n Note: When Creating Account, Make Sure to Remember the Account Number and PIN");
+        // allows for delay in file creation
+        delay(10);
     }
+    FILE *checkIndex = fopen("./database/index.txt", "ab+");
+    fclose(checkIndex);
+
+    FILE *checkTransaction = fopen("./database/transaction.log", "ab+");
+    fclose(checkTransaction);
+
 
     char choice[1024];
     char options[6][100] = {"1. CREATE NEW BANK ACCOUNT", "2. DELETE BANK ACCOUNT",
@@ -97,7 +108,7 @@ int main() {
 
             case 5:
                 printf("Exiting App...");
-                break;
+                exit(0);
 
             default:
                 printf("Invalid Choice\n");
@@ -148,9 +159,9 @@ void createAccount() {
         fgets(IDNo, sizeof(IDNo), stdin);
         IDNo[strcspn(IDNo, "\n")] = 0;
 
-        if (!isNum(IDNo) || strlen(IDNo) != 8) printf("Enter a Valid, 8 Digit Integer ID\n\n");
+        if (!isInt(IDNo) || strlen(IDNo) != 8) printf("Enter a Valid, 8 Digit Integer ID\n\n");
 
-    } while (!isNum(IDNo) || strlen(IDNo) != 8);
+    } while (!isInt(IDNo) || strlen(IDNo) != 8);
 
 
     // gets + validates PIN from user
@@ -159,9 +170,9 @@ void createAccount() {
         fgets(PIN, sizeof(PIN), stdin);
         PIN[strcspn(PIN, "\n")] = 0;
 
-        if ((strlen(PIN) != 4) || !(isNum(PIN))) printf("Enter a Valid 4-digit Integer PIN \n\n");
+        if ((strlen(PIN) != 4) || !(isInt(PIN))) printf("Enter a Valid 4-digit Integer PIN \n\n");
 
-    } while ((strlen(PIN) != 4) || !(isNum(PIN)));
+    } while ((strlen(PIN) != 4) || !(isInt(PIN)));
 
     // gets + validates account type
     do {
@@ -550,7 +561,7 @@ void deposit() {
 
         printf("\n");
         formatChars();
-        printf(" RM %.2f ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ACCOUNT NO. %s \n"
+        printf("RM %.2f ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ACCOUNT NO. %s \n"
                "CURRENT BALANCE IN %s:         RM %.2f\n", amountAdd, displayAccount, displayAccount, finalBalance);
         formatChars();
         printf("\n");
@@ -571,6 +582,16 @@ void withdraw() {
         strcat(accountNumber, ".txt");
 
         if (!existsFile(accountNumber)) {printf("Account Not Found\n");}
+        else {
+            char path[100] = "./database/";
+            strcat(path, accountNumber);
+            path[strlen(path)] = 0;
+
+            double finalBalance = getBalance(path);
+
+            if (finalBalance == 0) printf("Error - Insufficient Balance.\n\n");
+
+        }
 
     } while(!existsFile(accountNumber));
 
@@ -631,7 +652,7 @@ void withdraw() {
 
         printf("\n");
         formatChars();
-        printf("RM %.2f ← ← ← ← ← ← ← ← ← ← ← ← ← ← ACCOUNT NO. %s. \n"
+        printf("RM %.2f ← ← ← ← ← ← ← ← ← NO. %s. \n"
                "CURRENT BALANCE:          RM %.2f\n", amountWithdraw, displayAccount, finalBalance);
         formatChars();
         printf("\n");
