@@ -14,22 +14,22 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-bool existsFile(char accNo[]);
+#include "formatChars.h"
+#include "isNum.h"
+#include "existsFile.h"
+#include "delay.h"
+#include "getAccDetails.h"
+#include "checkPIN.h"
+#include "setBalance.h"
+#include "isStr.h"
+#include "addFile.h"
+
 void createAccount();
-void addFile(char accNo[], char name[], char ID[], char accType[], float balance, char PIN[]);
-bool isStr(char inString[]);
-bool isNum(char inString[]);
 void deleteAccount();
 void deposit();
-void format_chars();
 void withdraw();
-void remit();
-void delay(double number_of_seconds);
-void setBalance(char filePath[], double balance);
-double getBalance(char filePath[]);
-bool checkPIN(char accountNumber[]);
-void exitProgram();
 void listAccounts();
+void remit();
 
 int main() {
     // checks if database directory exists and makes it if not.
@@ -45,7 +45,7 @@ int main() {
     do {
         // Format and output welcome message
         delay(0.5);
-        format_chars();
+        formatChars();
         printf("                        WELCOME TO SOFTBANK              ");
         printf("\n                            1. CREATE NEW BANK ACCOUNT");
         printf("\n                            2. DELETE BANK ACCOUNT");
@@ -53,7 +53,7 @@ int main() {
         printf("\n                            4. WITHDRAW FROM BANK");
         printf("\n                            5. REMITTANCE\n");
         printf("\n                            Q. QUIT\n");
-        format_chars();
+        formatChars();
 
         // Get choice from user
         printf("ENTER CHOICE: ");
@@ -68,7 +68,7 @@ int main() {
         // convert to upper case for comparison
         for (int i=0; i<strlen(choice); i++) choice[i] = toupper(choice[i]);
         printf("\n");
-        format_chars();
+        formatChars();
 
         int index=0;
         for (index=0; index < 6; index++) if (strstr(options[index], choice) != NULL) break;
@@ -107,255 +107,13 @@ int main() {
 
     return 0;
 }
-void exitProgram() {
-    printf("\nCorrupted File in databases. Please clear the folder and empty index.txt\n");
-    exit(1);
-}
 
-// creates a delay.
-void delay(double number_of_seconds){
-    sleep(number_of_seconds);
-}
-
-// gets account type from file (S/C)
-char getAccountType(char filePath[]) {
-    char buffer[1024] = "";
-
-    FILE *bfile = fopen(filePath, "r");
-    fgets(buffer, sizeof(buffer), bfile);
-    buffer[strcspn(buffer, "\n")] = 0;
-
-    int typeIndex = (strstr(buffer, "TYPE:") == NULL) ? -1 : strstr(buffer, "TYPE:") - &buffer[0] + 5;
-    if (typeIndex == -1) exitProgram();
-
-    return buffer[typeIndex];
-}
-
-// performs remittance
-void remit() {
-    char accOriginNo[100] = "";
-    char accDestNo[100] = "";
-
-    // Gets + validates the origin account number from the user
-    do {
-        printf("Enter Origin Account Number: ");
-        fgets(accOriginNo, sizeof(accOriginNo), stdin);
-        accOriginNo[strcspn(accOriginNo, "\n")] = 0;
-        strcat(accOriginNo, ".txt");
-
-        if (!existsFile(accOriginNo)) printf("Enter an Existing Account No. \n\n");
-    } while (!existsFile(accOriginNo));
-
-
-    // Gets + validates the destination account number from the user
-    do {
-        printf("Enter Destination Account Number: ");
-        fgets(accDestNo, sizeof(accDestNo), stdin);
-        accDestNo[strcspn(accDestNo, "\n")] = 0;
-        strcat(accDestNo, ".txt");
-
-        if (!existsFile(accOriginNo)) printf("Account No. not Found \n\n");
-        if (strcmp(accDestNo, accOriginNo)==0) printf("Cannot Send Money to the Same Bank Account \n\n");
-
-    } while (!existsFile(accDestNo) || strcmp(accDestNo, accOriginNo)==0);
-
-    //sets up the path for reading in the balances of both and modifying them.
-    char pathBeneficiary[100] = "./database/";
-    char pathRecipient[100] = "./database/";
-
-    strcat(pathBeneficiary, accOriginNo);
-    strcat(pathRecipient, accDestNo);
-
-    pathBeneficiary[strlen(pathBeneficiary)] = 0;
-    pathRecipient[strlen(pathRecipient)] = 0;
-
-    double amountAdd = 0;
-    double senderBalance = getBalance(pathBeneficiary);
-    double receiverBalance = getBalance(pathRecipient);
-
-    char amount[100] = "";
-    char *endPtr;
-
-    checkPIN(accOriginNo);
-
-    // "Savings to Current account will incur a 2% remittance fee"
-    // "(e.g. Transfer amount: RM100, remittance fee: RM2)."
-
-    // "Current to Savings account will incur a 3% remittance fee"
-    // "(e.g. Transfer amount: RM100, remittance fee: RM3)."
-
-    // NO CHARGES WILL BE INCURRED FOR TRANSFERS BETWEEN THE SAME ACCOUNT TYPE
-    double percentOnTop = 0;
-    if ((getAccountType(pathBeneficiary)== 'C') && (getAccountType(pathRecipient)== 'S')) {
-        percentOnTop = 0.03;
-    }
-    if ((getAccountType(pathBeneficiary)== 'S') && (getAccountType(pathRecipient)== 'C')) {
-        percentOnTop = 0.02;
-    }
-
-    while (amountAdd <= 0 || senderBalance < amountAdd*(1+percentOnTop)) {
-        printf("Enter Amount to Transfer: ");
-        fgets(amount,sizeof(amount),stdin);
-        amount[strcspn(amount, "\n")] = 0;
-
-        amountAdd = strtod(amount, &endPtr);
-
-        if (!isNum(amount)) continue;
-        if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
-        if (senderBalance < amountAdd) printf("Error - Insufficient Balance.\n\n");
-        if (amountAdd == 0) printf("Error - Add Amount Must Be Greater than 0.\n\n");
-    }
-
-    double senderDeduct = (1+percentOnTop) * amountAdd;
-
-    // "The remittance fee shall be deducted from the current balance of the sender"
-    setBalance(pathRecipient, receiverBalance + amountAdd);
-    setBalance(pathBeneficiary, senderBalance - senderDeduct);
-
-    char displayAccountOriginNo[20] = "";
-    char displayAccountDestNo[20] = "";
-
-    for (int i=0; i<strlen(accDestNo); i++) {
-        if (accDestNo[i] == '.') break;
-        displayAccountDestNo[i] = accDestNo[i];
-    }
-    for (int i=0; i<strlen(accOriginNo); i++) {
-        if (accOriginNo[i] == '.') break;
-        displayAccountOriginNo[i] = accOriginNo[i];
-    }
-
-    printf("\n");
-    format_chars();
-    printf("                     SUCCESSFUL REMITTANCE RECEIPT\n");
-    printf("                         %s ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶  %s\n", displayAccountOriginNo, displayAccountDestNo);
-    printf("                         AMOUNT:                               RM %.2lf\n", amountAdd);
-    printf("                         CHARGES INCURRED:                     RM %.2lf\n", percentOnTop*amountAdd);
-    printf("                         DEDUCTED:  RM %.2lf + RM %.2lf  =  RM %.2lf\n", amountAdd, percentOnTop*amountAdd, senderDeduct);
-    printf("                         %s: %.2lf - %.2lf  =  RM %.2lf\n", displayAccountOriginNo, senderBalance, senderDeduct, senderBalance - senderDeduct);
-    format_chars();
-    printf("\n");
-
-}
-
-// opens the account file and then checks if the PIN inside matches with the parameter.
-bool checkPIN(char accountNumber[]) {
-    char accDetails[1024] = "", PINUsr[100] = "";
-    bool match = false;
-
-    char path[1024] = "./database/";
-    strcat(path, accountNumber);
-    strcat(path, "\0");
-
-    FILE *PINFile = fopen(path, "r");
-    fgets(accDetails, sizeof(accDetails), PINFile);
-
-    // Gets the position of 'PIN:XXXX'
-    int startPIN = (strstr(accDetails, "PIN:") == NULL) ? -1 : strstr(accDetails, "PIN:") - &accDetails[0];
-    if (startPIN == -1) exitProgram();
-
-    char pin[5] = {accDetails[startPIN+4], accDetails[startPIN+5], accDetails[startPIN+6], accDetails[startPIN+7], '\0'};
-
-    // Gets and Validates PIN from user
-     do {
-        printf("Enter PIN: ");
-        fgets(PINUsr, sizeof(PINUsr), stdin);
-        PINUsr[strcspn(PINUsr, "\n")] = 0;
-
-        if (strlen(PINUsr) != 4) {
-            printf("PIN must be 4 Integer Digits. \n\n");
-            continue;
-        }
-         if (strcmp(PINUsr, pin) != 0) {
-            printf("Incorrect PIN. \n\n");
-            continue;
-        }
-        if (strcmp(PINUsr, pin) == 0) {
-            match = true;
-        }
-
-    } while (strcmp(PINUsr, pin) != 0);
-
-    fclose(PINFile);
-
-    return match;
-}
-
-// gets the balance of the account from account number
-double getBalance(char filePath[]) {
-    char buffer[1024] = "";
-    char balance[100] = "";
-
-    FILE *pfile = fopen(filePath, "r");
-    fgets(buffer, sizeof(buffer), pfile);
-    fclose(pfile);
-    buffer[strcspn(buffer, "\n")] = 0;
-
-    // gets balance.
-    int balStart = (strstr(buffer, "BALANCE:") == NULL) ? -1 : strstr(buffer, "BALANCE:") - &buffer[0] + 8;
-    int balEnd = (strstr(buffer, ",PIN:") == NULL) ? -1 : strstr(buffer, ",PIN:") - &buffer[0];
-    if (balStart == -1 || balEnd == -1) exitProgram();
-
-    int length = balEnd - balStart;
-
-    for (int z=0; z<length; z++) {
-        char now[2] = {buffer[balStart + z], '\0'};
-        strcat(balance, &now[0]);
-    }
-
-    double finalBalance = 0;
-
-    strcat(balance, "\0");
-    finalBalance = atof(balance);
-
-    return finalBalance;
-}
-
-// Updates the balance stored in the file for a particular account.
-void setBalance(char path[], double finalBalance) {
-    char finalPrint[200] = "";
-    char finalBalanceString[200] = "";
-    char buffer[1024] = "";
-
-    FILE *pfile = fopen(path, "r");
-    fgets(buffer, sizeof(buffer), pfile);
-    fclose(pfile);
-    buffer[strcspn(buffer, "\n")] = 0;
-
-    // finds the location of PIN:XXXX and retrieves the value
-    int balStart = (strstr(buffer, "BALANCE:") == NULL) ? -1 : strstr(buffer, "BALANCE:") - &buffer[0] + 8;
-    int balEnd = (strstr(buffer, ",PIN:") == NULL) ? -1 : strstr(buffer, ",PIN:") - &buffer[0];
-
-    if (balStart == -1 || balEnd == -1) exitProgram();
-
-    snprintf(finalBalanceString, sizeof(finalBalanceString), "%.2f", finalBalance);
-    strcat(finalBalanceString, "\0");
-
-    // puts the final balance within an output string and writes it to the file for the account number
-    char cache[2] = {'s', '\0'};
-    for (int z=0; z<balStart; z++) {
-        cache[0] = buffer[z];
-        strcat(finalPrint, cache);
-    }
-
-    strcat(finalPrint, finalBalanceString);
-
-    for (int z=balEnd; z<strlen(buffer); z++) {
-        cache[0] = buffer[z];
-        strcat(finalPrint, cache);
-    }
-
-    strcat(finalPrint, "\0");
-
-    FILE *wfile = fopen(path, "w");
-    fprintf(wfile, "%s\n", finalPrint);
-    fclose(wfile);
-}
 
 void createAccount() {
     printf("                              CREATE ACCOUNT\n");
-    format_chars();
+    formatChars();
 
-    char name[1024] = "", PIN[1024] = "", IDNo[1024] = "", accType[2] = "";
+    char name[1024] = "", PIN[1024] = "", IDNo[1024] = "", accType[8] = "";
     srand(time(NULL));
 
     int generatedNo;
@@ -381,6 +139,7 @@ void createAccount() {
         name[strcspn(name, "\n")] = 0;
 
         if (!isStr(name)) printf("Enter a Valid String Name\n\n");
+
     } while (!isStr(name));
 
     // gets + validates ID from user
@@ -390,6 +149,7 @@ void createAccount() {
         IDNo[strcspn(IDNo, "\n")] = 0;
 
         if (!isNum(IDNo) || strlen(IDNo) != 8) printf("Enter a Valid, 8 Digit Integer ID\n\n");
+
     } while (!isNum(IDNo) || strlen(IDNo) != 8);
 
 
@@ -413,7 +173,7 @@ void createAccount() {
     } while ((strcasecmp(accType, "S") != 0 && strcasecmp(accType, "C") != 0) || strlen(accType) == 0);
 
     printf("\n");
-    format_chars();
+    formatChars();
 
     switch (toupper(accType[0])) {
         case 'S':
@@ -427,7 +187,7 @@ void createAccount() {
 
     printf("\nBalance: RM 0");
     printf("\nChanges May Take a Few Moments to Take Place\n");
-    format_chars();
+    formatChars();
     printf("\n");
 
 
@@ -508,7 +268,7 @@ void deleteAccount() {
     char accNo[1024] = "", accDetails[1024] = "", accConfirm[1024] = "";
 
     printf("                         DELETE ACCOUNT\n");
-    format_chars();
+    formatChars();
 
     // lists all accounts
     listAccounts();
@@ -521,8 +281,8 @@ void deleteAccount() {
         strcat(accNo, ".txt");
 
         if (!existsFile(accNo)) {
-            printf("Enter an Existing Account No. \n");
-            format_chars();
+            printf("Account Not Found\n\n");
+            formatChars();
             continue;
         }
 
@@ -531,7 +291,7 @@ void deleteAccount() {
         accConfirm[strcspn(accConfirm, "\n")] = 0;
         strcat(accConfirm, ".txt");
 
-        if (strcmp(accConfirm, accNo) != 0) {printf("\nAccount Details Do Not Match.");}
+        if (strcmp(accConfirm, accNo) != 0) {printf("Account Details Do Not Match.\n");}
 
     } while ((!existsFile(accNo)) || (strcmp(accConfirm, accNo) != 0));
 
@@ -589,9 +349,9 @@ void deleteAccount() {
         fprintf(writeFile, "%s", contents);
         fclose(writeFile);
 
-        format_chars();
+        formatChars();
         printf("ACCOUNT DELETED SUCCESSFULLY\n");
-        format_chars();
+        formatChars();
 
         FILE *logFile = fopen("./database/transaction.log", "a");
 
@@ -607,82 +367,111 @@ void deleteAccount() {
     }
 }
 
-//checks if the text file with the account number exists,
-//i.e. if the file is in the index
-bool existsFile(char accNo[]) {
-    FILE *pfile = fopen("./database/index.txt", "r");
-    char buffer[1024] = "";
-    bool returnVal = false;
+void remit() {
+    char accOriginNo[100] = "";
+    char accDestNo[100] = "";
 
-    while (fgets(buffer, sizeof(buffer), pfile) != NULL) {
-        buffer[strcspn(buffer, "\n")] = 0;
-        if (strcmp(buffer, accNo) == 0) {
-            returnVal = true;
-        }
+    // Gets + validates the origin account number from the user
+    do {
+        printf("Enter Origin Account Number: ");
+        fgets(accOriginNo, sizeof(accOriginNo), stdin);
+        accOriginNo[strcspn(accOriginNo, "\n")] = 0;
+        strcat(accOriginNo, ".txt");
+
+        if (!existsFile(accOriginNo)) {printf("Account Not Found\n\n");}
+    } while (!existsFile(accOriginNo));
+
+
+    // Gets + validates the destination account number from the user
+    do {
+        printf("Enter Destination Account Number: ");
+        fgets(accDestNo, sizeof(accDestNo), stdin);
+        accDestNo[strcspn(accDestNo, "\n")] = 0;
+        strcat(accDestNo, ".txt");
+
+        if (!existsFile(accOriginNo)) {printf("Account Not Found\n\n");}
+        else if (strcmp(accDestNo, accOriginNo)==0) printf("Cannot Send Money to the Same Bank Account \n\n");
+
+    } while (!existsFile(accDestNo) || strcmp(accDestNo, accOriginNo)==0);
+
+    //sets up the path for reading in the balances of both and modifying them.
+    char pathBeneficiary[100] = "./database/";
+    char pathRecipient[100] = "./database/";
+
+    strcat(pathBeneficiary, accOriginNo);
+    strcat(pathRecipient, accDestNo);
+
+    pathBeneficiary[strlen(pathBeneficiary)] = 0;
+    pathRecipient[strlen(pathRecipient)] = 0;
+
+    double amountAdd = 0;
+    double senderBalance = getBalance(pathBeneficiary);
+    double receiverBalance = getBalance(pathRecipient);
+
+    char amount[100] = "";
+    char *endPtr;
+
+    checkPIN(accOriginNo);
+
+    // "Savings to Current account will incur a 2% remittance fee"
+    // "(e.g. Transfer amount: RM100, remittance fee: RM2)."
+
+    // "Current to Savings account will incur a 3% remittance fee"
+    // "(e.g. Transfer amount: RM100, remittance fee: RM3)."
+
+    // NO CHARGES WILL BE INCURRED FOR TRANSFERS BETWEEN THE SAME ACCOUNT TYPE
+    double percentOnTop = 0;
+    if ((getAccountType(pathBeneficiary)== 'C') && (getAccountType(pathRecipient)== 'S')) {
+        percentOnTop = 0.03;
+    }
+    if ((getAccountType(pathBeneficiary)== 'S') && (getAccountType(pathRecipient)== 'C')) {
+        percentOnTop = 0.02;
     }
 
-    fclose(pfile);
-    return returnVal;
-}
+    while (amountAdd <= 0 || senderBalance < amountAdd*(1+percentOnTop) || !isNum(amount)) {
+        amount[0] = '\0';
 
-// writes the data to the file corresponding to the account number
-// used for updating the balance during deposit/withdrawal
-void addFile(char accNo[], char name[], char ID[], char accType[], float balance, char PIN[]) {
-    char finalFile[1024] = "./database/";
-    strcat(finalFile, accNo);
-    FILE *pfile = fopen(finalFile, "w");
+        printf("Enter Amount to Transfer: RM ");
+        fgets(amount,sizeof(amount),stdin);
+        amount[strcspn(amount, "\n")] = 0;
 
-    if (!(pfile == NULL)) {
-        char logs[2048];
-        time_t currentTime;
-        time(&currentTime);
+        amountAdd = strtod(amount, &endPtr);
 
-
-        snprintf(logs,sizeof(logs), "NAME:%s,ID:%s,NUMBER:%s,TYPE:%s,BALANCE:%.2f,PIN:%s",
-            name, ID, accNo, accType, balance, PIN);
-
-        fprintf(pfile, "%s" ,logs);
-        fclose(pfile);
-
-        FILE *index = fopen("./database/index.txt", "a");
-        fprintf(index, "%s\n", accNo);
-        fclose(index);
-    }
-}
-
-// function for verifying if a string is a number
-bool isNum(char inString[]) {
-    int maxIndex = strlen(inString);
-    char current;
-
-    for (int i=0; i<maxIndex; i++) {
-        current = inString[i];
-        if (!('0' <= current && current <= '9') && !(current == '.')) {
-            return false;
-        }
+        if (!isNum(amount)) printf("Invalid input. Please enter a numeric value.\n\n");
+        else if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
+        else if (senderBalance < amountAdd || senderBalance < amountAdd*(1+percentOnTop)) printf("Error - Insufficient Balance.\n\n");
+        else if (amountAdd == 0) printf("Error - Add Amount Must Be Greater than 0.\n\n");
     }
 
-    return true;
-}
+    double senderDeduct = (1+percentOnTop) * amountAdd;
 
-// Checks if the string is entirely alphabetic
-bool isStr(char inString[]) {
-    const char* pattern = "[a-zA-Z]";
-    regex_t re;
-    int returnVal;
+    // "The remittance fee shall be deducted from the current balance of the sender"
+    setBalance(pathRecipient, receiverBalance + amountAdd);
+    setBalance(pathBeneficiary, senderBalance - senderDeduct);
 
-    if (regcomp(&re, pattern, REG_EXTENDED)) {
-        perror("Failed to compile regular expression");
-        exit(EXIT_FAILURE);
+    char displayAccountOriginNo[20] = "";
+    char displayAccountDestNo[20] = "";
+
+    for (int i=0; i<strlen(accDestNo); i++) {
+        if (accDestNo[i] == '.') break;
+        displayAccountDestNo[i] = accDestNo[i];
+    }
+    for (int i=0; i<strlen(accOriginNo); i++) {
+        if (accOriginNo[i] == '.') break;
+        displayAccountOriginNo[i] = accOriginNo[i];
     }
 
-    for (int i=0; i<strlen(inString); i++) {
-        returnVal = regexec(&re, &inString[i], 0, NULL, 0);
+    printf("\n");
+    formatChars();
+    printf("                     SUCCESSFUL REMITTANCE RECEIPT\n");
+    printf("                         %s ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶  %s\n", displayAccountOriginNo, displayAccountDestNo);
+    printf("                         AMOUNT:                               RM %.2lf\n", amountAdd);
+    printf("                         CHARGES INCURRED:                     RM %.2lf\n", percentOnTop*amountAdd);
+    printf("                         DEDUCTED:  RM %.2lf + RM %.2lf        RM %.2lf\n", amountAdd, percentOnTop*amountAdd, senderDeduct);
+    printf("                         %s: %.2lf - %.2lf         RM %.2lf\n", displayAccountOriginNo, senderBalance, senderDeduct, senderBalance - senderDeduct);
+    formatChars();
+    printf("\n");
 
-        if (returnVal != 0) return false;
-    }
-
-    return true;
 }
 
 // deposit function
@@ -692,19 +481,18 @@ void deposit() {
 
     do {
         printf("                       DEPOSIT INTO ACCOUNT\n");
-        format_chars();
+        formatChars();
 
         printf("Enter Account Number: ");
         fgets(accountNumber, sizeof(accountNumber), stdin);
 	    accountNumber[strcspn(accountNumber, "\n")] = 0;
         strcat(accountNumber, ".txt");
 
-        if (!existsFile(accountNumber)) printf("Enter an Existing Account No.\n");
-        format_chars();
+        if (!existsFile(accountNumber)) {printf("Account Not Found\n\n");}
+        formatChars();
 
         errno = 0;
     } while(!existsFile(accountNumber));
-
 
     if (existsFile(accountNumber)) {
 
@@ -723,13 +511,15 @@ void deposit() {
 
         // gets + validates deposit amount
         while (amountAdd <= 0 || amountAdd > 50000 || !isNum(amount)) {
-            printf("Enter Amount to deposit: ");
+            amount[0] = '\0';
+
+            printf("Enter Amount to deposit: RM ");
             fgets(amount,sizeof(amount),stdin);
             amount[strcspn(amount, "\n")] = 0;
 
             amountAdd = strtod(amount, &endPtr);
 
-            if (!isNum(amount)) printf("Invalid input. Please enter a numeric value.\n\n");
+            if (!isNum(amount)) {printf("Invalid input. Please enter a numeric value.\n\n");}
             else if (amountAdd > 50000) printf("Deposit Amount Cannot Be Greater than RM 50,000\n\n");
             else if (amountAdd<=0) printf("Please Enter a Value Above 0.\n\n");
 
@@ -759,10 +549,10 @@ void deposit() {
         }
 
         printf("\n");
-        format_chars();
-        printf("DEPOSIT OF RM %.2f WAS SUCCESSFULLY TRANSFERRED TO ACCOUNT NO. %s \n"
-               "CURRENT BALANCE IN %s: RM %.2f\n", amountAdd, displayAccount, displayAccount, finalBalance);
-        format_chars();
+        formatChars();
+        printf(" RM %.2f ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ⟶ ACCOUNT NO. %s \n"
+               "CURRENT BALANCE IN %s:         RM %.2f\n", amountAdd, displayAccount, displayAccount, finalBalance);
+        formatChars();
         printf("\n");
 
     }
@@ -773,24 +563,24 @@ void withdraw() {
 
     //gets account number
     do {
-        format_chars();
+        formatChars();
 
         printf("Enter Account Number: ");
         fgets(accountNumber, sizeof(accountNumber), stdin);
 	    accountNumber[strcspn(accountNumber, "\n")] = 0;
         strcat(accountNumber, ".txt");
 
+        if (!existsFile(accountNumber)) {printf("Account Not Found\n");}
+
     } while(!existsFile(accountNumber));
 
-    if (existsFile(accountNumber)) {
 
+    if (existsFile(accountNumber)) {
         checkPIN(accountNumber);
 
         char path[100] = "./database/";
         strcat(path, accountNumber);
         path[strlen(path)] = 0;
-
-
 
         double amountWithdraw = 0;
         double finalBalance = getBalance(path);
@@ -800,18 +590,19 @@ void withdraw() {
         printf("\nCurrent Balance:  RM %.2lf\n", finalBalance);
 
         // gets + validates withdrawal amount from user
-        do {
-            printf("Enter Amount to Withdraw: ");
+        while (amountWithdraw <= 0.0f || finalBalance-amountWithdraw < 0.0f || !isNum(amount)) {
+            printf("Enter Amount to Withdraw: RM ");
             fgets(amount,sizeof(amount),stdin);
             amount[strcspn(amount, "\n")] = 0;
 
             amountWithdraw = strtod(amount, &endPtr);
 
-            if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
-            if (finalBalance-amountWithdraw < 0.0f) printf("Withdrawal amount is greater than the balance.\n\n");
-            if (amountWithdraw <= 0.0f) printf("Withdrawal amount must be greater than 0\n\n");
+            if (!isNum(amount)) {printf("Invalid input. Please enter a numeric value.\n\n");}
+            else if (endPtr == amount || *endPtr != '\0') printf("Invalid input. Please enter a numeric value.\n\n");
+            else if (finalBalance-amountWithdraw < 0.0f) printf("Withdrawal amount is greater than the balance.\n\n");
+            else if (amountWithdraw <= 0.0f) printf("Withdrawal amount must be greater than 0\n\n");
+        }
 
-        } while (amountWithdraw <= 0.0f || finalBalance-amountWithdraw < 0.0f);
         finalBalance -= amountWithdraw;
 
         setBalance(path, finalBalance);
@@ -839,17 +630,12 @@ void withdraw() {
         }
 
         printf("\n");
-        format_chars();
-        printf("RM %.2f WAS SUCCESSFULLY WITHDRAWN FROM ACCOUNT NO. %s. \n"
-               "CURRENT BALANCE: RM %.2f\n", amountWithdraw, displayAccount, finalBalance);
-        format_chars();
+        formatChars();
+        printf("RM %.2f ← ← ← ← ← ← ← ← ← ← ← ← ← ← ACCOUNT NO. %s. \n"
+               "CURRENT BALANCE:          RM %.2f\n", amountWithdraw, displayAccount, finalBalance);
+        formatChars();
         printf("\n");
 
     }
 }
 
-// adds spacing and asterisks to make beautify the interface
-void format_chars() {
-    for (int i=0; i<80; i++)printf("_");
-    printf("\n");
-}
