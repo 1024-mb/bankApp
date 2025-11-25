@@ -18,6 +18,7 @@
 #include "setBalance.h"
 #include "isStr.h"
 #include "addFile.h"
+#include "displayInfo.h"
 
 
 // MAIN Program:
@@ -38,7 +39,7 @@ int main() {
         mkdir("./database", 0700);
 
         printf("\n Please Wait....\n");
-        printf("\n Note: When Creating Account, Make Sure to Remember the Account Number and PIN");
+        printf("\n Note: When Creating Account, Make Sure to Remember the Account Number and PIN. See the User Guide For More Details");
         // allows for delay in file creation
         delay(10);
     }
@@ -48,10 +49,11 @@ int main() {
     FILE *checkTransaction = fopen("./database/transaction.log", "ab+");
     fclose(checkTransaction);
 
+    displayInfo();
 
     char choice[1024];
-    char options[6][100] = {"1. CREATE NEW BANK ACCOUNT", "2. DELETE BANK ACCOUNT",
-        "3. DEPOSIT IN BANK", "4. WITHDRAW FROM BANK", "5. REMITTANCE", "Q. QUIT"};
+    char options[6][100] = {"1. CREATE NEW BANK ACCOUNT", "2. DELETE ACCOUNT",
+        "3. DEPOSIT IN ACCOUNT", "4. WITHDRAW FROM ACCOUNT", "5. REMITTANCE", "Q. QUIT"};
 
     do {
         // Format and output welcome message
@@ -59,9 +61,9 @@ int main() {
         formatChars();
         printf("                        WELCOME TO SOFTBANK              ");
         printf("\n                            1. CREATE NEW BANK ACCOUNT");
-        printf("\n                            2. DELETE BANK ACCOUNT");
-        printf("\n                            3. DEPOSIT IN BANK");
-        printf("\n                            4. WITHDRAW FROM BANK");
+        printf("\n                            2. DELETE ACCOUNT");
+        printf("\n                            3. DEPOSIT IN ACCOUNT");
+        printf("\n                            4. WITHDRAW FROM ACCOUNT");
         printf("\n                            5. REMITTANCE\n");
         printf("\n                            Q. QUIT\n");
         formatChars();
@@ -150,8 +152,9 @@ void createAccount() {
         name[strcspn(name, "\n")] = 0;
 
         if (!isStr(name)) printf("Enter a Valid String Name\n\n");
+        else if (strlen(name) == 0) printf("Enter a Valid String Name\n\n");
 
-    } while (!isStr(name));
+    } while (!isStr(name) || (strlen(name) == 0));
 
     // gets + validates ID from user
     do {
@@ -177,8 +180,8 @@ void createAccount() {
     // gets + validates account type
     do {
         printf("Enter Account Type (S for Savings, C for Current):  ");
-        scanf("%s", accType);
-
+        fgets(accType, sizeof(accType), stdin);
+        accType[strcspn(accType, "\n")] = 0;
         if (strcasecmp(accType, "S") != 0 && strcasecmp(accType, "C") != 0) printf("Enter C or S \n\n");
 
     } while ((strcasecmp(accType, "S") != 0 && strcasecmp(accType, "C") != 0) || strlen(accType) == 0);
@@ -215,7 +218,6 @@ void createAccount() {
     fclose(pfile);
     addFile(strVersion, name, IDNo, accType, 0, PIN );
 
-    while (getchar() != '\n');
 }
 
 void listAccounts() {
@@ -224,7 +226,7 @@ void listAccounts() {
     int typeIndex = 0;
 
     printf("ALL ACCOUNTS: \n\n");
-    printf("  NUMBER   |    NAME  \n");
+    printf("  NUMBER     |    NAME  \n");
     while (fgets(bufferIndex, sizeof(bufferIndex), pfile) != NULL) {
         // Finds index of string to print until
         typeIndex = (strstr(bufferIndex, ".") == NULL) ? -1 : strstr(bufferIndex, ".") - &bufferIndex[0];
@@ -241,8 +243,7 @@ void listAccounts() {
         fileName[strcspn(fileName, "\n")] =0;
 
         // formats the output to resemble a table
-        strcat(out, displayName);
-        strcat(out, "  |  ");
+
 
         char path[200] = "./database/" ;
         strcat(path, fileName);
@@ -258,9 +259,8 @@ void listAccounts() {
         for (int i=5; i<endIndex; i++) {
             current[i-5] = accDetails[i];
         }
-        strcat(out, current);
 
-        printf("%s", out);
+        printf("%11s  |  %s", displayName, current);
 
         fclose(nameFile);
 
