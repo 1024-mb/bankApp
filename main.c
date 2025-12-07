@@ -38,8 +38,9 @@ int main() {
     if (stat("./database", &st) == -1) {
         mkdir("./database", 0700);
 
-        printf("\n Please Wait....\n");
-        printf("\n Note: When Creating Account, Make Sure to Remember the Account Number and PIN. See the User Guide For More Details");
+        printf("\nSetting up Directories. Please Wait....\n");
+        printf("\n\nNote: When Creating Account, Make Sure to Remember the Account Number and PIN. See the User Guide For More Details");
+
         // allows for delay in file creation
         delay(10);
     }
