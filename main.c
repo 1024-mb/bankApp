@@ -52,8 +52,8 @@ int main() {
     displayInfo();
 
     char choice[1024];
-    char options[6][100] = {"1. CREATE NEW BANK ACCOUNT", "2. DELETE ACCOUNT",
-        "3. DEPOSIT IN ACCOUNT", "4. WITHDRAW FROM ACCOUNT", "5. REMITTANCE", "Q. QUIT"};
+    char options[6][100] = {"1CREATENEWBANKACCOUNT", "2DELETEACCOUNT",
+        "3DEPOSITINACCOUNT", "4WITHDRAWFROMACCOUNT", "5REMITTANCE", "QUIT"};
 
     do {
         // Format and output welcome message
