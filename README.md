@@ -1,4 +1,6 @@
-Text-based Banking System implemented using the C programming langauge
+
+### Text-based Banking System implemented using the C programming langauge for Linux and Mac. Click <a href='https://github.com/1024-mb/bankAppWindows'>here</a> for the Windows Version
+<br>
 
 # Features & Walkthrough:
 
